@@ -14,9 +14,52 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "WireFormat.h"
+
 #include "Homa.h"
+
+#include <memory>
+
+const char* usage = "server <IP> <PORT>";
 
 int main(int argc, char* argv[])
 {
+    if (argc != 3) {
+        printf("Usage:\n");
+        printf("    %s\n", usage);
+        return 0;
+    }
+
+    char* ip_str = argv[1];
+    char* port_str = argv[2];
+
+    std::string locator;
+
+    locator.append(ip_str);
+    locator.append(":");
+    locator.append(port_str);
+
+    printf("%s\n", locator.c_str());
+
+    Homa::Transport::Address addr(locator);
+    Homa::Transport transport(addr);
+
+    std::unique_ptr<Homa::ServerRpc> serverRpc;
+    Request payload;
+
+    while (1) {
+        serverRpc = std::move(transport.receiveServerRpc());
+        if (serverRpc) {
+            Request* request = serverRpc->request->get(&payload, 0);
+            printf("%d: %s\n", request->id, request->message);
+
+            Response* response = serverRpc->response->alloc<Response>();
+            response->id = request->id;
+            sprintf(response->message, "Recieved %d from you.", response->id);
+            transport.replyServerRpc(std::move(serverRpc));
+        }
+        transport.poll();
+    }
+
     return 0;
 }
